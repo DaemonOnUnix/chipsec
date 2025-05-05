@@ -48,7 +48,8 @@ chipsec@intel.com
 
 #include "include/chipsec.h"
 
-#ifdef CONFIG_EFI#include <linux/efi.h>
+#ifdef CONFIG_EFI
+#include <linux/efi.h>
 
 #endif
 
@@ -65,7 +66,8 @@ is no-cache by default since kernels 2.6.25. */
 # define IOREMAP_NO_CACHE(address, size) ioremap_nocache(address, size)
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)#include <linux/static_call.h>
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 10, 0)
+#include <linux/static_call.h>
 
 #include <linux/kprobes.h>
 
@@ -390,7 +392,8 @@ static inline int uncached_access(struct file * file, unsigned long addr) {
      * On ia64, we ignore O_SYNC because we cannot tolerate memory attribute aliases.
      */
     return !(efi_mem_attributes(addr) & EFI_MEMORY_WB);
-    #elif defined(CONFIG_MIPS) {
+    #elif defined(CONFIG_MIPS)
+    {
         extern int __uncached_access(struct file * file, unsigned long addr);
 
         return __uncached_access(file, addr);
@@ -753,6 +756,16 @@ static void apply_ucode_patch(void * info) {
 
 static unsigned long hypercall_page_c(void) {
     return hypercall_page();
+}
+
+static unsigned long long my_ioread64(void *addr) {
+    return *((unsigned long long *) addr);
+}
+
+static void my_iowrite64(void *addr, unsigned long long value)
+{
+    unsigned long long *p = (void*)addr;
+    *p = value;
 }
 
 static long d_ioctl(struct file * file, unsigned int ioctl_num, unsigned long ioctl_param) {
@@ -1515,9 +1528,7 @@ static long d_ioctl(struct file * file, unsigned int ioctl_num, unsigned long io
             break;
             #ifdef __x86_64__
         case 8:
-            first = ioread32(ioaddr);
-            second = ioread32(ioaddr + 4);
-            ptr[0] = first | (second << 32);
+            ptr[0] = my_ioread64(ioaddr);
             break;
             #endif
         }
@@ -1558,13 +1569,9 @@ static long d_ioctl(struct file * file, unsigned int ioctl_num, unsigned long io
         case 4:
             iowrite32(value, ioaddr);
             break;
-        case 8:
             #ifdef __x86_64__
-            first = value & 0xFFFFFFFF;
-            second = (value >> 32) & 0xFFFFFFFF;
-
-            iowrite32(first, ioaddr);
-            iowrite32(second, ioaddr + 4);
+        case 8:
+            my_iowrite64(ioaddr, value);
             #endif
             break;
         }
@@ -1672,6 +1679,52 @@ static long d_ioctl(struct file * file, unsigned int ioctl_num, unsigned long io
 
         if (copy_to_user((void * ) ioctl_param, (void * ) ptrbuf, (sizeof(long) * numargs)) > 0)
             return -EFAULT;
+        break;
+        #else
+        return -EOPNOTSUPP;
+        #endif
+    }
+
+    case IOCTL_FXSAVE_BUFF_WRITE: {
+        #ifdef CONFIG_X86
+        numargs = 3;
+        printk(KERN_INFO "[chipsec] > IOCTL_FXSAVE_BUFF_WRITE\n");
+        if (copy_from_user((void * ) ptrbuf, (void * ) ioctl_param, (sizeof(long) * numargs)) > 0)
+            return -EFAULT;
+
+        void write_fxsave(void *ctx, void *buffer, long size);
+        char *dest = (char * ) ptr[0];
+        void *ioaddr = my_xlate_dev_mem_ptr((unsigned long) dest);
+        if (!ioaddr) {
+            printk(KERN_ALERT "[chipsec] ERROR: failed to xlate 0x%lx\n", (unsigned long) dest);
+            return -EIO;
+        }
+        dest = ioaddr;
+        char *src = (char * ) ptr[1];
+        size_t size = ptr[2];
+
+        void *buffer_tmp = kzalloc(size, GFP_KERNEL);
+        if (!buffer_tmp) {
+            printk(KERN_ALERT "[chipsec] ERROR: STATUS_UNSUCCESSFUL - could not allocate memory\n");
+            return -ENOMEM;
+        }
+
+        if (copy_from_user(buffer_tmp, src, size)) {
+            kfree(buffer_tmp);
+            printk(KERN_ALERT "[chipsec] ERROR: STATUS_INVALID_PARAMETER\n");
+            return -EFAULT;
+        }
+
+        // check 16 bit alignment
+        if (((uintptr_t)(dest - 256)) % (1 << 16)) {
+            kfree(buffer_tmp);
+            printk(KERN_ALERT "[chipsec] ERROR: INVALID_ALIGNMENT\n");
+            return -EFAULT;
+        }
+
+        write_fxsave(dest - 256, buffer_tmp, size);
+        kfree(buffer_tmp);
+
         break;
         #else
         return -EOPNOTSUPP;

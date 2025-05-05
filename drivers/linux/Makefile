@@ -6,7 +6,7 @@ VMODDIR = $(MODDIR)/$(KVER)
 KSRC	?= $(VMODDIR)/build
 
 obj-m += chipsec.o
-chipsec-objs-y := chipsec_km.o
+chipsec-objs-y := chipsec_km.o multi_byte_primitives.o
 chipsec-objs-$(CONFIG_X86_32) += i386/cpu.o
 chipsec-objs-$(CONFIG_X86_64) += amd64/cpu.o
 chipsec-objs := $(chipsec-objs-y)
