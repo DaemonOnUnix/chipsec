@@ -50,8 +50,8 @@ chipsec@intel.com
 #define IOCTL_FREE_PHYSMEM             _IOWR(IOCTL_NUM, 0x16, int*)
 #define IOCTL_SWSMI_TIMED              _IOWR(IOCTL_NUM, 0x17, int*)
 #define IOCTL_FXSAVE_BUFF_WRITE        _IOWR(IOCTL_NUM, 0x18, int*)
-#define IOCTL_WRITE_128_SSE            _IOWR(IOCTL_NUM, 0x18, int*)
-#define IOCTL_READ_128_SSE             _IOWR(IOCTL_NUM, 0x19, int*)
+#define IOCTL_WRITE_128_SSE            _IOWR(IOCTL_NUM, 0x19, int*)
+#define IOCTL_READ_128_SSE             _IOWR(IOCTL_NUM, 0x1A, int*)
 
 //
 // SoC IOSF Message Bus constants

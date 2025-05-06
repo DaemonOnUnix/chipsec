@@ -73,6 +73,7 @@ IOCTL_VA2PA = 0x14
 IOCTL_MSGBUS_SEND_MESSAGE = 0x15
 IOCTL_FREE_PHYSMEM = 0x16
 IOCTL_SWSMI_TIMED = 0x17
+IOCTL_FXSAVE_BUFF_WRITE = 0x18
 
 _tools = {}
 
@@ -521,6 +522,12 @@ class LinuxHelper(Helper):
             data = buffer[base:base + new_size].tobytes()
             attr = struct.unpack('I', buffer[8:12])[0]
         return (off, buf, hdr, data, guid, attr)
+    
+    def fxsaves(self, cpu_thread_id: int, addr: int, buffer: bytes) -> None:
+        self.set_affinity(cpu_thread_id)
+        in_buf = struct.pack(f'2Q{len(buffer)}s', addr, len(buffer), buffer)
+        out_buf = self.ioctl(IOCTL_FXSAVE_BUFF_WRITE, in_buf)
+        return
 
     def kern_get_EFI_variable(self, name: str, guid: str) -> bytes:
         (_, _, _, data, guid, _) = self.kern_get_EFI_variable_full(name, guid)
@@ -621,6 +628,7 @@ class LinuxHelper(Helper):
         out_buf = self.ioctl(IOCTL_SWSMI_TIMED, in_buf)
         ret = struct.unpack(f'8{self._pack}', out_buf)
         return ret
+    
 
     def get_tool_info(self, tool_type: str) -> Tuple[Optional[str], str]:
         tool_name = _tools[tool_type] if tool_type in _tools else None

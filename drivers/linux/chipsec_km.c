@@ -1687,43 +1687,33 @@ static long d_ioctl(struct file * file, unsigned int ioctl_num, unsigned long io
 
     case IOCTL_FXSAVE_BUFF_WRITE: {
         #ifdef CONFIG_X86
-        numargs = 3;
+        void write_fxsave(void *ctx, void *buffer, long size);
         printk(KERN_INFO "[chipsec] > IOCTL_FXSAVE_BUFF_WRITE\n");
+
+        numargs = 2;
         if (copy_from_user((void * ) ptrbuf, (void * ) ioctl_param, (sizeof(long) * numargs)) > 0)
             return -EFAULT;
 
-        void write_fxsave(void *ctx, void *buffer, long size);
         char *dest = (char * ) ptr[0];
+        unsigned long long size = ((unsigned long long*)ptr)[1];
+        printk(KERN_INFO "[chipsec] > IOCTL_FXSAVE_BUFF_WRITE: dest = 0x%lx, size = %llu\n", (unsigned long) dest, size);
+
         void *ioaddr = my_xlate_dev_mem_ptr((unsigned long) dest);
+        printk(KERN_INFO "[chipsec] > IOCTL_FXSAVE_BUFF_WRITE: ioaddr = 0x%lx\n", (unsigned long) ioaddr);
         if (!ioaddr) {
             printk(KERN_ALERT "[chipsec] ERROR: failed to xlate 0x%lx\n", (unsigned long) dest);
             return -EIO;
         }
         dest = ioaddr;
-        char *src = (char * ) ptr[1];
-        size_t size = ptr[2];
-
-        void *buffer_tmp = kzalloc(size, GFP_KERNEL);
-        if (!buffer_tmp) {
-            printk(KERN_ALERT "[chipsec] ERROR: STATUS_UNSUCCESSFUL - could not allocate memory\n");
-            return -ENOMEM;
-        }
-
-        if (copy_from_user(buffer_tmp, src, size)) {
-            kfree(buffer_tmp);
-            printk(KERN_ALERT "[chipsec] ERROR: STATUS_INVALID_PARAMETER\n");
-            return -EFAULT;
-        }
+        char *src = ((char*)ptr + 16); // skip 2 quadwords
 
         // check 16 bit alignment
         if (((uintptr_t)(dest - 256)) % (1 << 16)) {
-            kfree(buffer_tmp);
-            printk(KERN_ALERT "[chipsec] ERROR: INVALID_ALIGNMENT\n");
+            printk(KERN_ALERT "[chipsec] ERROR: INVALID_ALIGNMENT: %lx\n", ((uintptr_t)(dest - 256)));
             return -EFAULT;
         }
 
-        write_fxsave(dest - 256, buffer_tmp, size);
-        kfree(buffer_tmp);
+        write_fxsave(dest - 256, src, size);
 
         break;
         #else
